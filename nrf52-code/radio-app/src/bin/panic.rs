@@ -3,8 +3,17 @@
 
 use cortex_m::asm;
 use cortex_m_rt::entry;
+
+
 // this imports `src/lib.rs`to retrieve our global logger + panicking-behavior
 use radio_app as _;
+
+// custom panic handler
+// #[panic_handler]
+// fn panic(info: &core::panic::PanicInfo) -> ! {
+//     defmt::error!("{}", defmt::Debug2Format(info));
+//     asm::udf();
+// }
 
 #[entry]
 fn main() -> ! {

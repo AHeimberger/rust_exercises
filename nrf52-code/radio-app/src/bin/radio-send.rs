@@ -22,9 +22,10 @@ fn main() -> ! {
     let mut packet = Packet::new();
 
     // these three are equivalent
-    let msg: &[u8; 5] = &[72, 101, 108, 108, 111];
+    // let msg: &[u8; 5] = &[72, 101, 108, 108, 111];
     // let msg: &[u8; 5] = &[b'H', b'e', b'l', b'l', b'o'];
     // let msg: &[u8; 5] = b"Hello";
+    let msg = b"Hello World";
 
     defmt::println!(
         "sending: {}",
