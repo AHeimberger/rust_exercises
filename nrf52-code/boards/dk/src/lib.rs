@@ -10,6 +10,7 @@ use core::{
     ops,
     sync::atomic::{self, AtomicU32, Ordering},
     time::Duration,
+    fmt::Write,
 };
 
 use cortex_m::{asm, peripheral::NVIC};
@@ -21,10 +22,9 @@ use hal::{
     clocks::{self, Clocks},
     gpio::{p0, Level, Output, Input, Pin, Port, PushPull, PullUp},
     rtc::{Rtc, RtcInterrupt},
-    timer::OneShot, prelude::InputPin,
+    timer::OneShot, prelude::InputPin, Uarte, pac::UARTE0,
 };
 
-use defmt;
 #[cfg(any(feature = "radio", feature = "advanced"))]
 use defmt_rtt as _; // global logger
 
@@ -48,6 +48,8 @@ pub struct Board {
     pub timer: Timer,
     /// Buttons
     pub buttons: Buttons,
+    /// Uart
+    pub uart: Uart,
 
     /// Radio interface
     #[cfg(feature = "radio")]
@@ -158,6 +160,24 @@ impl Button {
     }
 }
 
+/// A Uart
+pub struct Uart {
+    inner: Uarte<UARTE0>
+}
+
+impl Uart {
+    /// Writes to the Uart
+    pub fn write(&mut self, buffer: &str) {
+        match self.inner.write_fmt(format_args!("{}", buffer)) {
+            Ok(_) => defmt::println!("Wrote: {}", buffer),
+            Err(_) => defmt::error!("Write did not succeed: {}", buffer),
+        }
+        // match write!(self.inner, buffer) {
+        //     Ok(_) => defmt::println!("Wrote: {}", buffer),
+        //     Err(_) => defmt::error!("Write did not succeed: {}", buffer),
+        // }
+    }
+}
 
 /// A timer for creating blocking delays
 pub struct Timer {
@@ -226,7 +246,6 @@ pub fn init() -> Result<Board, ()> {
         > = None;
 
         defmt::debug!("Initializing the board");
-
         let clocks = Clocks::new(periph.CLOCK);
         let clocks = clocks.enable_ext_hfosc();
         let clocks = clocks.set_lfclk_src_external(clocks::LfOscConfiguration::NoExternalNoBypass);
@@ -237,7 +256,6 @@ pub fn init() -> Result<Board, ()> {
         let clocks = unsafe { CLOCKS.get_or_insert(_clocks) };
 
         defmt::debug!("Clocks configured");
-
         let mut rtc = Rtc::new(periph.RTC0, 0).unwrap();
         rtc.enable_interrupt(RtcInterrupt::Overflow, None);
         rtc.enable_counter();
@@ -257,8 +275,16 @@ pub fn init() -> Result<Board, ()> {
 
         defmt::debug!("RTC started");
 
-        let pins = p0::Parts::new(periph.P0);
+        let pins: p0::Parts = p0::Parts::new(periph.P0);
 
+        // Configure UART
+        let uart = Uarte::new(periph.UARTE0, hal::uarte::Pins {
+            txd: pins.p0_06.into_push_pull_output(hal::gpio::Level::High).degrade(),
+            rxd: pins.p0_08.into_floating_input().degrade(),
+            cts: Some(pins.p0_07.into_floating_input().degrade()),
+            rts: Some(pins.p0_05.into_push_pull_output(hal::gpio::Level::High).degrade()),
+        }, hal::uarte::Parity::EXCLUDED, hal::uarte::Baudrate::BAUD115200);
+        
         // NOTE LEDs turn on when the pin output level is low
         let led1pin = pins.p0_13.degrade().into_push_pull_output(Level::High);
         let led2pin = pins.p0_14.degrade().into_push_pull_output(Level::High);
@@ -266,10 +292,10 @@ pub fn init() -> Result<Board, ()> {
         let led4pin = pins.p0_16.degrade().into_push_pull_output(Level::High);
 
         // NOTE Buttons ....
-        let b_1: Pin<Input<PullUp>> = pins.p0_11.degrade().into_pullup_input();
-        let b_2: Pin<Input<PullUp>> = pins.p0_12.degrade().into_pullup_input();
-        let b_3: Pin<Input<PullUp>> = pins.p0_24.degrade().into_pullup_input();
-        let b_4: Pin<Input<PullUp>> = pins.p0_25.degrade().into_pullup_input();
+        let button1pin: Pin<Input<PullUp>> = pins.p0_11.degrade().into_pullup_input();
+        let button2pin: Pin<Input<PullUp>> = pins.p0_12.degrade().into_pullup_input();
+        let button3pin: Pin<Input<PullUp>> = pins.p0_24.degrade().into_pullup_input();
+        let button4pin: Pin<Input<PullUp>> = pins.p0_25.degrade().into_pullup_input();
         
         defmt::debug!("I/O pins have been configured for digital output");
 
@@ -295,11 +321,12 @@ pub fn init() -> Result<Board, ()> {
                 _4: Led { inner: led4pin },
             },
             buttons: Buttons {
-                _1: Button {inner: b_1 },
-                _2: Button {inner: b_2 },
-                _3: Button {inner: b_3 },
-                _4: Button {inner: b_4 },
+                _1: Button {inner: button1pin },
+                _2: Button {inner: button2pin },
+                _3: Button {inner: button3pin },
+                _4: Button {inner: button4pin },
             },
+            uart: Uart { inner: uart },
             #[cfg(feature = "radio")]
             radio,
             timer: Timer { inner: timer },
