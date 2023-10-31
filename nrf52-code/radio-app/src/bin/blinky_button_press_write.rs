@@ -26,6 +26,7 @@ fn main() -> ! {
         if button_1.is_pressed() | button_2.is_pressed() | button_3.is_pressed() | button_4.is_pressed() {
             defmt::println!("Button Pressed");
             led_1.on();
+            // sudo picocom --b 115200 /dev/ttyACM0
             uart.write("hello world\r\n");
         } else {
             led_1.off();
