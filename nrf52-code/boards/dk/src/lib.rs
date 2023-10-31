@@ -19,9 +19,9 @@ pub use hal::ieee802154;
 pub use hal::pac::{interrupt, Interrupt, NVIC_PRIO_BITS, RTC0};
 use hal::{
     clocks::{self, Clocks},
-    gpio::{p0, Level, Output, Pin, Port, PushPull},
+    gpio::{p0, Level, Output, Input, Pin, Port, PushPull, PullUp},
     rtc::{Rtc, RtcInterrupt},
-    timer::OneShot,
+    timer::OneShot, prelude::InputPin,
 };
 
 use defmt;
@@ -46,6 +46,8 @@ pub struct Board {
     pub leds: Leds,
     /// Timer
     pub timer: Timer,
+    /// Buttons
+    pub buttons: Buttons,
 
     /// Radio interface
     #[cfg(feature = "radio")]
@@ -130,6 +132,32 @@ impl Led {
         }
     }
 }
+
+/// All Buttons on the board
+// https://infocenter.nordicsemi.com/index.jsp?topic=%2Fug_nrf52840_dk%2FUG%2Fdk%2Fintro.html
+pub struct Buttons {
+    /// Button1: pin P0.11
+    pub _1: Button,
+    /// Button2: pin P0.12
+    pub _2: Button,
+    /// Button3: pin P0.13
+    pub _3: Button,
+    /// Button4: pin P0.14
+    pub _4: Button
+}
+
+/// A single Button
+pub struct Button {
+    inner: Pin<Input<PullUp>>,
+}
+
+impl Button {
+    /// Returns `true` if the Button is pressed
+    pub fn is_pressed(&self) -> bool {
+        self.inner.is_low().unwrap()
+    }
+}
+
 
 /// A timer for creating blocking delays
 pub struct Timer {
@@ -237,6 +265,12 @@ pub fn init() -> Result<Board, ()> {
         let led3pin = pins.p0_15.degrade().into_push_pull_output(Level::High);
         let led4pin = pins.p0_16.degrade().into_push_pull_output(Level::High);
 
+        // NOTE Buttons ....
+        let b_1: Pin<Input<PullUp>> = pins.p0_11.degrade().into_pullup_input();
+        let b_2: Pin<Input<PullUp>> = pins.p0_12.degrade().into_pullup_input();
+        let b_3: Pin<Input<PullUp>> = pins.p0_24.degrade().into_pullup_input();
+        let b_4: Pin<Input<PullUp>> = pins.p0_25.degrade().into_pullup_input();
+        
         defmt::debug!("I/O pins have been configured for digital output");
 
         let timer = hal::Timer::new(periph.TIMER0);
@@ -259,6 +293,12 @@ pub fn init() -> Result<Board, ()> {
                 _2: Led { inner: led2pin },
                 _3: Led { inner: led3pin },
                 _4: Led { inner: led4pin },
+            },
+            buttons: Buttons {
+                _1: Button {inner: b_1 },
+                _2: Button {inner: b_2 },
+                _3: Button {inner: b_3 },
+                _4: Button {inner: b_4 },
             },
             #[cfg(feature = "radio")]
             radio,
