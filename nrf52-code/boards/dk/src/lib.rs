@@ -22,7 +22,7 @@ use hal::{
     clocks::{self, Clocks},
     gpio::{p0, Level, Output, Input, Pin, Port, PushPull, PullUp},
     rtc::{Rtc, RtcInterrupt},
-    timer::OneShot, prelude::InputPin, Uarte, pac::UARTE0,
+    timer::OneShot, prelude::InputPin, Uarte, pac::{UARTE0},
 };
 
 #[cfg(any(feature = "radio", feature = "advanced"))]
@@ -272,7 +272,6 @@ pub fn init() -> Result<Board, ()> {
         // interrupt handler (where the peripheral is accessed without any synchronization
         // mechanism)
         unsafe { NVIC::unmask(Interrupt::RTC0) };
-
         defmt::debug!("RTC started");
 
         let pins: p0::Parts = p0::Parts::new(periph.P0);
@@ -284,20 +283,21 @@ pub fn init() -> Result<Board, ()> {
             cts: Some(pins.p0_07.into_floating_input().degrade()),
             rts: Some(pins.p0_05.into_push_pull_output(hal::gpio::Level::High).degrade()),
         }, hal::uarte::Parity::EXCLUDED, hal::uarte::Baudrate::BAUD115200);
+        defmt::debug!("Uart has been configured");
         
         // NOTE LEDs turn on when the pin output level is low
         let led1pin = pins.p0_13.degrade().into_push_pull_output(Level::High);
         let led2pin = pins.p0_14.degrade().into_push_pull_output(Level::High);
         let led3pin = pins.p0_15.degrade().into_push_pull_output(Level::High);
         let led4pin = pins.p0_16.degrade().into_push_pull_output(Level::High);
+        defmt::debug!("I/O pins have been configured for digital output");
 
         // NOTE Buttons ....
         let button1pin: Pin<Input<PullUp>> = pins.p0_11.degrade().into_pullup_input();
         let button2pin: Pin<Input<PullUp>> = pins.p0_12.degrade().into_pullup_input();
         let button3pin: Pin<Input<PullUp>> = pins.p0_24.degrade().into_pullup_input();
         let button4pin: Pin<Input<PullUp>> = pins.p0_25.degrade().into_pullup_input();
-        
-        defmt::debug!("I/O pins have been configured for digital output");
+        defmt::debug!("I/O pins have been configured for digital input");
 
         let timer = hal::Timer::new(periph.TIMER0);
 
