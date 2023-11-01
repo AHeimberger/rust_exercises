@@ -277,6 +277,7 @@ pub fn init() -> Result<Board, ()> {
         let pins: p0::Parts = p0::Parts::new(periph.P0);
 
         // Configure UART
+        // https://github.com/nrf-rs/nrf-hal/blob/master/examples/hello-world/src/main.rs
         let uart = Uarte::new(periph.UARTE0, hal::uarte::Pins {
             txd: pins.p0_06.into_push_pull_output(hal::gpio::Level::High).degrade(),
             rxd: pins.p0_08.into_floating_input().degrade(),
