@@ -23,11 +23,12 @@ mod app {
 
         // INTENSET is one of POWER's registers
         // the `write()` method writes a (32-bit) value into the register
-        power.intenset.write(|w| {
+        power.intenset.write(|w| {  // interupt enable set (intenset)
             // `w` is a "constructor" with methods to clear/set the bitfields of INTENSET
             // `w` starts with all bitfields set to their reset value
             // USBDETECTED is one of INTENSET's 1-bit fields
             w.usbdetected().set_bit()
+            // w.usbdetected().clear_bit()
         });
 
         defmt::println!("USBDETECTED interrupt enabled");
@@ -67,6 +68,6 @@ mod app {
     #[task(binds = POWER_CLOCK)]
     fn on_power_event(_cx: on_power_event::Context) {
         defmt::println!("POWER event occurred");
-        asm::bkpt();
+        asm::bkpt(); // stack trace because of that breakpoint - we crashed it here to stop it on purpose
     }
 }

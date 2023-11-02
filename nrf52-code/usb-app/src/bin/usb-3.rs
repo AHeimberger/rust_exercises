@@ -6,6 +6,8 @@ use usb_app as _;
 
 #[rtic::app(device = dk, peripherals = false)]
 mod app {
+    use core::num::NonZeroU8;
+
     use dk::{
         peripheral::USBD,
         usbd::{self, Ep0In, Event},
@@ -55,7 +57,10 @@ mod app {
                 // nothing to do here at the moment
             }
 
-            Event::UsbEp0DataDone => todo!(), // <- TODO
+            Event::UsbEp0DataDone => {
+                defmt::println!("EP0IN: transfer done");
+                ep0in.end(usbd);
+            }
 
             Event::UsbEp0Setup => {
                 let bmrequesttype = usbd::bmrequesttype(usbd);
@@ -81,16 +86,34 @@ mod app {
                         if descriptor == Descriptor::Device =>
                     {
                         defmt::println!("GET_DESCRIPTOR Device [length={}]", length);
-
+                        let descriptor = usb2::device::Descriptor{ 
+                            bDeviceClass: 0,
+                            bDeviceSubClass: 0,
+                            bDeviceProtocol: 0,
+                            bMaxPacketSize0: usb2::device::bMaxPacketSize0::B64,
+                            idVendor: consts::USB_VID_DEMO,
+                            idProduct: consts::USB_PID_RTIC_DEMO,
+                            bcdDevice: 0x0100,
+                            iManufacturer: None,
+                            iProduct: None,
+                            iSerialNumber: None,
+                            bNumConfigurations: NonZeroU8::new(1).unwrap()
+                        };
                         // TODO send back a valid device descriptor, truncated to `length` bytes
-                        // let desc = usb2::device::Descriptor { .. };
-                        let resp = [];
-                        ep0in.start(&resp, usbd);
+                        let resp = descriptor.bytes();
+                        if (length as usize) < resp.len() {
+                            defmt::println!("-> Can \"not\" copy complete response len");
+                            ep0in.start(&resp[0..length as usize], usbd);
+                        }
+                        else {
+                            defmt::println!("-> Can copy complete response len");
+                            ep0in.start(&resp, usbd);
+                        }
                     }
                     Request::SetAddress { .. } => {
                         // On macOS you'll get this request before the GET_DESCRIPTOR request so we
                         // need to catch it here. We'll properly handle this request later
-                        // but for now it's OK to do nothing.
+                        // but for now it's OK to do nothing.fon
                     }
                     _ => {
                         defmt::error!(

@@ -61,7 +61,7 @@ mod app {
             // TODO change `state` as specified in chapter 9.1 USB Device States, of the USB specification
             Event::UsbReset => {
                 defmt::println!("USB reset condition detected");
-                todo!();
+                *state = State::Default;
             }
 
             Event::UsbEp0DataDone => {
@@ -74,12 +74,16 @@ mod app {
                     // unsupported or invalid request:
                     // TODO: add code to stall the endpoint
                     defmt::warn!("EP0IN: unexpected request; stalling the endpoint");
+                    usbd::ep0stall(usbd);
                 }
             }
         }
     }
 
-    fn ep0setup(usbd: &USBD, ep0in: &mut Ep0In, _state: &mut State) -> Result<(), ()> {
+    /// The `bConfigurationValue` of the only supported configuration
+    const CONFIG_VAL: u8 = 42;
+
+    fn ep0setup(usbd: &USBD, ep0in: &mut Ep0In, state: &mut State) -> Result<(), ()> {
         let bmrequesttype = usbd.bmrequesttype.read().bits() as u8;
         let brequest = usbd.brequest.read().brequest().bits();
         let wlength = usbd::wlength(usbd);
@@ -124,23 +128,73 @@ mod app {
             }
             // TODO implement Configuration descriptor
             Request::GetDescriptor {
-                // descriptor: Descriptor::Configuration { index },
-                descriptor: _,
-                length: _,
+                descriptor: Descriptor::Configuration { index },
+                length,
             } => {
-                return Err(());
+                if index == 0 {
+                    let mut resp = heapless::Vec::<u8, 64>::new();
+
+                    let conf_desc = usb2::configuration::Descriptor {
+                        wTotalLength: (usb2::configuration::Descriptor::SIZE
+                            + usb2::interface::Descriptor::SIZE)
+                            .into(),
+                        bNumInterfaces: core::num::NonZeroU8::new(1).unwrap(),
+                        bConfigurationValue: core::num::NonZeroU8::new(CONFIG_VAL).unwrap(),
+                        iConfiguration: None,
+                        bmAttributes: usb2::configuration::bmAttributes {
+                            self_powered: true,
+                            remote_wakeup: false,
+                        },
+                        bMaxPower: 250, // 500 mA
+                    };
+
+                    let iface_desc = usb2::interface::Descriptor {
+                        bInterfaceNumber: 0,
+                        bAlternativeSetting: 0,
+                        bNumEndpoints: 0,
+                        bInterfaceClass: 0,
+                        bInterfaceSubClass: 0,
+                        bInterfaceProtocol: 0,
+                        iInterface: None,
+                    };
+
+                    resp.extend_from_slice(&conf_desc.bytes()).unwrap();
+                    resp.extend_from_slice(&iface_desc.bytes()).unwrap();
+                    ep0in.start(&resp[..core::cmp::min(resp.len(), length.into())], usbd);
+                } else {
+                    // out of bounds access: stall the endpoint
+                    return Err(());
+                }
             }
-            Request::SetAddress { .. } => {
+            Request::SetAddress { address } => {
                 // On macOS you'll get this request before the GET_DESCRIPTOR request so we
                 // need to catch it here.
 
                 // TODO: handle this request properly now.
-                todo!()
+                match state {
+                    usb2::State::Default => {
+                        if let Some(address) = address {
+                            *state = State::Address(address);
+                        } else {
+                            // stay in the `Default` state
+                        }
+                    }
+                    usb2::State::Address(_) => {
+                        if let Some(address) = address {
+                            *state = State::Address(address);
+                        } else {
+                            *state = State::Default;
+                        }
+                    }
+                    usb2::State::Configured{..} => {
+                        return Err(())
+                    }
+                };
             }
 
             // stall any other request
             _ => return Err(()),
-        }
+        };
 
         Ok(())
     }

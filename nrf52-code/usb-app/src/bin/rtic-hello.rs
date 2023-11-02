@@ -1,6 +1,14 @@
 #![no_main]
 #![no_std]
 
+// rtic is an interrupt based system
+// problem of deadlock 
+// - shared resources will be locked and rtic will care about locking
+// - local resources can be used in the created tasks and if a local resource
+//   is used in two tasks rtic will say no
+// on every compile rtic-expansiong.rs is generated from the rtic file
+// - share data between main thread and task
+
 // this imports `src/lib.rs`to retrieve our global logger + panicking-behavior
 use usb_app as _;
 

@@ -39,7 +39,6 @@ pub enum Request {
 
     /// SET_CONFIGURATION
     // see section 9.4.7 of the USB specification
-    #[cfg(TODO)]
     SetConfiguration {
         /// bConfigurationValue to change the device to
         value: Option<NonZeroU8>,
@@ -60,8 +59,14 @@ impl Request {
         wlength: u16,
     ) -> Result<Self, Error> {
         // Request Codes
-        // see table 9-4 (USB specification)
+        // Page 251
+        // Table 9-4. Standard Request Codes
         const SET_ADDRESS: u8 = 5;
+        const GET_DESCRIPTOR: u8 = 6;
+        const SET_CONFIGURATION: u8 = 9;
+        // Table 9-5. Descriptor Types
+        const DEVICE: u8 = 1;
+        const CONFIGURATION: u8 = 2;
 
         // TODO implement another branch handling GET_DESCRIPTOR requests:
         //
@@ -74,20 +79,61 @@ impl Request {
         //
         // For more details, see https://embedded-trainings.ferrous-systems.com/setup-stage.html
 
-        if bmrequesttype == 0b00000000 && brequest == SET_ADDRESS {
-            // Set the device address for all future accesses.
-            // (Needed to successfully init when conected to Apple devices)
-            // Section 9.4.6 Set Address of the USB specification explains which values for wvalue,
-            // windex and wlength are valid.
-            if wvalue < 128 && windex == 0 && wlength == 0 {
-                Ok(Request::SetAddress {
-                    address: NonZeroU8::new(wvalue as u8),
-                })
-            } else {
-                Err(Error::BadRequest)
+        match (bmrequesttype, brequest) {
+            // 9.4.3 Get Descriptor
+            (0b1000_0000, GET_DESCRIPTOR) => {
+                // The wValue field specifies the descriptor type in the high byte (refer to Table 9-5)
+                // and the descriptor index in the low byte.
+                let desc_ty = (wvalue >> 8) as u8;
+                let desc_index = wvalue as u8;
+                // The wIndex field specifies the Language ID for string descriptors or is reset to zero
+                // for other descriptors. The wLength field specifies the number of bytes to return.
+                let lang_id = windex;
+                match (desc_ty, desc_index, lang_id) {
+                    (DEVICE, 0, 0) => {
+                        Ok(Request::GetDescriptor {
+                            descriptor: Descriptor::Device,
+                            length: wlength,
+                        })
+                    }
+                    (CONFIGURATION, _, 0) => {
+                        Ok(Request::GetDescriptor {
+                            descriptor: Descriptor::Configuration { index: desc_index },
+                            length: wlength,
+                        })
+                    }
+                    _ => Err(Error::BadRequest)
+                }
             }
-        } else {
-            Err(Error::UnknownRequest)
+            // 9.4.6 Set Address
+            (0b0000_0000, SET_ADDRESS) => {
+                // Set the device address for all future accesses.
+                // (Needed to successfully init when conected to Apple devices)
+                // Section 9.4.6 Set Address of the USB specification explains which values for wvalue,
+                // windex and wlength are valid.
+                match (wvalue < 128, windex, wlength) {
+                    (true, 0, 0) => {
+                        Ok(Request::SetAddress {address: NonZeroU8::new(wvalue as u8)})
+                    }
+                    _ => {
+                        Err(Error::BadRequest)
+                    }
+                }
+            }
+            // 9.4.7 Set Configuration
+            (0b0000_0000, SET_CONFIGURATION) => {
+                let valueh = (wvalue >> 8) as u8;
+                let valuel = wvalue as u8;
+                match (valuel, valueh, windex, wlength) {
+                    (valuel, 0, 0, 0) => {
+                        Ok(Request::SetConfiguration { value: NonZeroU8::new(valuel) })
+                    }
+                    _ => {
+                        Err(Error::BadRequest)
+                    }
+                }
+            }
+            _ => Err(Error::UnknownRequest)
         }
     }
 }
@@ -99,7 +145,6 @@ pub enum Descriptor {
     Device,
 
     /// Configuration descriptor
-    #[cfg(TODO)]
     Configuration {
         /// Index of the descriptor
         index: u8,
@@ -162,7 +207,6 @@ mod tests {
         //                                                    ^
     }
 
-    #[cfg(TODO)]
     #[test]
     fn get_descriptor_configuration() {
         // OK: GET_DESCRIPTOR Configuration 0 [length=9]
@@ -179,7 +223,6 @@ mod tests {
         //                                                 ^^^^
     }
 
-    #[cfg(TODO)]
     #[test]
     fn set_configuration() {
         // OK: SET_CONFIGURATION 1

@@ -43,7 +43,7 @@ mod app {
         }
     }
 
-    fn on_event(_usbd: &USBD, event: Event) {
+    fn on_event(usbd: &USBD, event: Event) {
         defmt::println!("USB: {} @ {}", event, dk::uptime());
 
         match event {
@@ -57,19 +57,19 @@ mod app {
                 // TODO read USBD registers
 
                 // the BMREQUESTTYPE register contains information about data recipient, transfer type and direction
-                let bmrequesttype: u8 = 0;
+                let bmrequesttype: u8 = usbd.bmrequesttype.read().bits() as u8;
                 // the BREQUEST register stores the type of the current request (e.g. SET_ADDRESS, GET_DESCRIPTOR, ...)
-                let brequest: u8 = 0;
+                let brequest: u8 = usbd.brequest.read().bits() as u8;
                 // wLength denotes the number of bytes to transfer (if any)
                 // composed of a high register (WLENGTHH) and a low register (WLENGTHL)
-                let wlength: u16 = 0;
+                let wlength: u16 = u16::from(usbd.wlengthh.read().bits() as u8) << 8 + u16::from(usbd.wlengthl.read().bits() as u8);
                 // wIndex is a generic index field whose meaning depends on the request type
                 // composed of a high register (WINDEXH) and a low register (WINDEXL)
-                let windex: u16 = 0;
+                let windex: u16 = u16::from(usbd.windexh.read().bits() as u8) << 8 + u16::from(usbd.windexl.read().bits() as u8);
                 // wValue is a generic paremeter field meaning depends on the request type (e.g. contains the device
                 // address in SET_ADRESS requests)
                 // composed of a high register (WVALUEH) and a low register (WVALUEL)
-                let wvalue: u16 = 0;
+                let wvalue: u16 = u16::from(usbd.wvalueh.read().bits() as u8) << 8 + u16::from(usbd.wvaluel.read().bits() as u8);
 
                 defmt::println!(
                     "SETUP: bmrequesttype: {}, brequest: {}, wlength: {}, windex: {}, wvalue: {}",
@@ -84,8 +84,7 @@ mod app {
                     .expect("Error parsing request");
                 match request {
                     Request::GetDescriptor { descriptor, length }
-                        if descriptor == Descriptor::Device =>
-                    {
+                        if descriptor == Descriptor::Device => {
                         // TODO modify `Request::parse()` in `nrf52-code/usb-lib/src/lib.rs`
                         // so that this branch is reached
 
